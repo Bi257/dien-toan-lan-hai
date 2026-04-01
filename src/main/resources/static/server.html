@@ -165,25 +165,27 @@
 
   function convertUTCToVN(log) {
     const match = log.match(/\[(.*?)\]/);
-
     if (!match) return log;
 
-    const rawTime = match[1];
+    const rawTime = match[1].trim();
+    let date = null;
 
-    // chỉ đổi nếu log đang ở dạng UTC/ISO
     if (rawTime.includes("T") || rawTime.includes("Z")) {
-      const date = new Date(rawTime);
-
-      if (!isNaN(date)) {
-        const vnTime = date.toLocaleString("vi-VN", {
-          timeZone: "Asia/Ho_Chi_Minh"
-        });
-
-        return log.replace(`[${rawTime}]`, `[${vnTime}]`);
-      }
+      date = new Date(rawTime);
+    } else if (/^\\d{4}-\\d{2}-\\d{2}/.test(rawTime)) {
+      date = new Date(rawTime.replace(" ", "T"));
     }
 
-    return log;
+    if (!date || isNaN(date.getTime())) {
+      return log;
+    }
+
+    const vnTime = date.toLocaleString("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      hour12: false
+    });
+
+    return log.replace("[" + rawTime + "]", "[" + vnTime + "]");
   }
 
   async function loadLog() {
@@ -313,7 +315,7 @@
 
   window.onload = () => {
     loadLog();
-    setInterval(loadLog, 6000);
+    setInterval(loadLog, 9000);
   };
 </script>
 

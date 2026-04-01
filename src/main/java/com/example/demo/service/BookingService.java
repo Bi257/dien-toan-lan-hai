@@ -20,7 +20,7 @@ public class BookingService {
     // Danh sách server khác
     private String[] otherServers = {
             "https://dien-toan-lan-hai.onrender.com",
-
+             "https://dien-toan-lan-hai-488r.onrender.com"
     };
 
     public void book(Booking b, String serverId) {

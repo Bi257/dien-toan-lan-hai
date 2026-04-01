@@ -299,10 +299,6 @@ Thay toàn bộ hàm `loadLog()` hiện tại bằng đoạn dưới đây:
     setInterval(loadLog, 3000);
   };
 </script>
-```
-
-Nguyên nhân chính là trình duyệt đang cache `/api/log`, nên sau khi đặt phòng thành công log mới không được tải lại. Dòng `?t=${Date.now()}` và `cache: "no-store"` sẽ buộc lấy log mới nhất mỗi lần refresh.
-
 
 </body>
 </html>

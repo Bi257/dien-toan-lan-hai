@@ -24,7 +24,7 @@ public class BookingService {
     // 🌐 Server khác
     private String[] otherServers = {
             "https://dien-toan-lan-hai.onrender.com",
-            "https://dien-toan-lan-hai-488r.onrender.com"
+            "https://dientoanck.onrender.com"
     };
 
     // 🧠 Trạng thái server

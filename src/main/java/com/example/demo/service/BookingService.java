@@ -20,7 +20,8 @@ public class BookingService {
 
     private List<String> logs = new ArrayList<>();
     private String[] otherServers = {
-            "https://dien-toan-lan-hai.onrender.com",
+            "https://hotel-booking-system-new.onrender.com",
+            "https://demo2-75m2.onrender.com",
             "https://dientoanck.onrender.com"
     };
 
@@ -33,8 +34,13 @@ public class BookingService {
         }
     }
 
-    private synchronized int tick() { return ++clock; }
-    private synchronized void updateClock(int received) { clock = Math.max(clock, received) + 1; }
+    private synchronized int tick() {
+        return ++clock;
+    }
+
+    private synchronized void updateClock(int received) {
+        clock = Math.max(clock, received) + 1;
+    }
 
     private String log(String type, String message) {
         String time = LocalTime.now().withNano(0).toString();
@@ -60,8 +66,10 @@ public class BookingService {
                 while (!success && retryCount <= maxRetries) {
                     try {
                         tick();
-                        if(retryCount > 0) logs.add(log("2PC", "Thử lại lần " + retryCount + " tới " + url));
-                        else logs.add(log("2PC", "Gửi PREPARE tới " + url));
+                        if (retryCount > 0)
+                            logs.add(log("2PC", "Thử lại lần " + retryCount + " tới " + url));
+                        else
+                            logs.add(log("2PC", "Gửi PREPARE tới " + url));
 
                         Boolean res = restTemplate.postForObject(url + "/api/prepare", b, Boolean.class);
 
@@ -86,7 +94,7 @@ public class BookingService {
 
             // ===== QUYẾT ĐỊNH THEO QUORUM (ĐA SỐ) =====
             // Tính toán: Chỉ cần >= 50% số server khác OK (hoặc tùy bạn chỉnh ngưỡng)
-            int threshold = (otherServers.length / 2); 
+            int threshold = (otherServers.length / 2);
 
             if (okServers.size() >= threshold) {
                 tick();
@@ -133,6 +141,11 @@ public class BookingService {
         logs.add(log("DATABASE", "Đã COMMIT vào DB"));
     }
 
-    public List<String> getLogs() { return logs; }
-    public ConcurrentHashMap<String, Boolean> getServerStatus() { return serverStatus; }
+    public List<String> getLogs() {
+        return logs;
+    }
+
+    public ConcurrentHashMap<String, Boolean> getServerStatus() {
+        return serverStatus;
+    }
 }

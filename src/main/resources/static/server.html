@@ -2,7 +2,6 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Server Log</title>
 
   <style>
@@ -11,7 +10,7 @@
     body {
       margin: 0;
       padding: 20px;
-      font-family: Arial, sans-serif;
+      font-family: Arial;
       background: #0d1117;
       color: white;
     }
@@ -20,17 +19,15 @@
 
     .top-bar {
       display: flex;
-      gap: 12px;
-      align-items: center;
+      gap: 10px;
       margin-bottom: 20px;
     }
 
     button {
-      padding: 10px 18px;
+      padding: 10px 16px;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
       background: #00ff66;
-      color: black;
       font-weight: bold;
       cursor: pointer;
     }
@@ -43,29 +40,25 @@
     .panel {
       flex: 1;
       background: #161b22;
-      padding: 16px;
-      border-radius: 12px;
+      padding: 12px;
+      border-radius: 10px;
       max-height: 85vh;
       overflow-y: auto;
     }
 
-    .panel h2 {
-      color: #58a6ff;
-    }
-
     .group {
-      margin-bottom: 16px;
-      padding: 12px;
-      border-radius: 10px;
+      margin-bottom: 14px;
+      padding: 10px;
+      border-radius: 8px;
       max-height: 220px;
       overflow-y: auto;
     }
 
-    .booking-group { background: #08253d; border-left: 4px solid #00bfff; }
-    .prepare-group { background: #3d3200; border-left: 4px solid #ffe600; }
-    .commit-group { background: #00331f; border-left: 4px solid #00ff66; }
-    .error-group { background: #3a0000; border-left: 4px solid #ff4d4d; }
-    .all-group { background: #1f2937; border-left: 4px solid #8b949e; }
+    .booking-group { background:#08253d; border-left:4px solid #00bfff;}
+    .prepare-group { background:#3d3200; border-left:4px solid #ffe600;}
+    .commit-group { background:#00331f; border-left:4px solid #00ff66;}
+    .error-group { background:#3a0000; border-left:4px solid #ff4d4d;}
+    .all-group { background:#1f2937; border-left:4px solid #8b949e;}
 
     .log {
       font-family: Consolas;
@@ -74,12 +67,12 @@
       border-bottom: 1px solid rgba(255,255,255,0.05);
     }
 
-    .booking-log { color: #66ccff; }
-    .prepare-log { color: #ffe066; }
-    .commit-log { color: #00ff88; }
-    .error-log { color: #ff6b6b; }
+    .booking-log { color:#66ccff; }
+    .prepare-log { color:#ffe066; }
+    .commit-log { color:#00ff88; }
+    .error-log { color:#ff6b6b; }
 
-    .empty { color: #aaa; font-style: italic; }
+    .empty { color:#aaa; font-style: italic; }
   </style>
 </head>
 
@@ -88,7 +81,7 @@
 <h1>🖥 Server Log Dashboard</h1>
 
 <div class="top-bar">
-  <button onclick="loadLog()">🔄 Tải log</button>
+  <button onclick="loadLog()">🔄 Reload</button>
   <div id="lastUpdate">Chưa cập nhật</div>
 </div>
 
@@ -96,7 +89,7 @@
 
   <!-- ALL SERVERS -->
   <div class="panel">
-    <h2>🌐 TẤT CẢ SERVER</h2>
+    <h2>🌐 ALL SERVERS</h2>
 
     <div class="group booking-group"><h3>Booking</h3><div id="booking"></div></div>
     <div class="group prepare-group"><h3>PREPARE</h3><div id="prepare"></div></div>
@@ -107,7 +100,7 @@
 
   <!-- MY SERVER -->
   <div class="panel">
-    <h2>🟢 SERVER CỦA BẠN</h2>
+    <h2 id="myServerTitle">🟢 MY SERVER</h2>
 
     <div class="group booking-group"><h3>Booking</h3><div id="my-booking"></div></div>
     <div class="group prepare-group"><h3>PREPARE</h3><div id="my-prepare"></div></div>
@@ -119,8 +112,8 @@
 </div>
 
 <script>
-const CURRENT_SERVER = "Booking Server + server 3";
 
+// ===== SERVER LIST =====
 const servers = [
   { name: "Server 5", url: "https://dien-toan-lan-hai.onrender.com" },
   { name: "Booking Server + server 3", url: "https://hotel-booking-system-new.onrender.com" },
@@ -128,6 +121,22 @@ const servers = [
   { name: "Server 1", url: "https://demo2-75m2.onrender.com" }
 ];
 
+// ===== AUTO DETECT CURRENT SERVER =====
+const CURRENT_URL = window.location.origin;
+
+function getCurrentServerName() {
+  const found = servers.find(s =>
+    CURRENT_URL.includes(new URL(s.url).hostname)
+  );
+  return found ? found.name : "UNKNOWN";
+}
+
+const CURRENT_SERVER = getCurrentServerName();
+document.getElementById("myServerTitle").innerText =
+  "🟢 " + CURRENT_SERVER;
+
+
+// ===== LOAD LOG =====
 async function loadLog() {
 
   let booking=[], prepare=[], commit=[], error=[], all=[];
@@ -139,24 +148,39 @@ async function loadLog() {
       let data = await res.json();
 
       data.reverse().forEach(log => {
+
         let full = `[${s.name}] ${log}`;
         let up = full.toUpperCase();
 
+        // ===== ALL =====
         all.unshift(`<div class="log">${full}</div>`);
 
         if(up.includes("BOOK")) booking.unshift(`<div class="log booking-log">${full}</div>`);
-        if(up.includes("PRE")) prepare.unshift(`<div class="log prepare-log">${full}</div>`);
-        if(up.includes("COMMIT")) commit.unshift(`<div class="log commit-log">${full}</div>`);
-        if(up.includes("ERROR")||up.includes("FAIL")) error.unshift(`<div class="log error-log">${full}</div>`);
+        if(up.includes("CAN_COMMIT") || up.includes("PRE_COMMIT"))
+          prepare.unshift(`<div class="log prepare-log">${full}</div>`);
+        if(up.includes("COMMIT"))
+          commit.unshift(`<div class="log commit-log">${full}</div>`);
+        if(up.includes("ERROR")||up.includes("FAIL")||up.includes("ABORT"))
+          error.unshift(`<div class="log error-log">${full}</div>`);
 
-        // LOCAL SERVER
+        // ===== MY SERVER =====
         if(s.name === CURRENT_SERVER){
+
           myAll.unshift(`<div class="log">${full}</div>`);
-          if(up.includes("BOOK")) myBooking.unshift(`<div class="log booking-log">${full}</div>`);
-          if(up.includes("PRE")) myPrepare.unshift(`<div class="log prepare-log">${full}</div>`);
-          if(up.includes("COMMIT")) myCommit.unshift(`<div class="log commit-log">${full}</div>`);
-          if(up.includes("ERROR")||up.includes("FAIL")) myError.unshift(`<div class="log error-log">${full}</div>`);
+
+          if(up.includes("BOOK"))
+            myBooking.unshift(`<div class="log booking-log">${full}</div>`);
+
+          if(up.includes("CAN_COMMIT") || up.includes("PRE_COMMIT"))
+            myPrepare.unshift(`<div class="log prepare-log">${full}</div>`);
+
+          if(up.includes("COMMIT"))
+            myCommit.unshift(`<div class="log commit-log">${full}</div>`);
+
+          if(up.includes("ERROR")||up.includes("FAIL")||up.includes("ABORT"))
+            myError.unshift(`<div class="log error-log">${full}</div>`);
         }
+
       });
 
     } catch(e){
@@ -166,14 +190,14 @@ async function loadLog() {
     }
   }));
 
-  // render LEFT
+  // ===== RENDER LEFT =====
   document.getElementById("booking").innerHTML = booking.join("") || "No log";
   document.getElementById("prepare").innerHTML = prepare.join("") || "No log";
   document.getElementById("commit").innerHTML = commit.join("") || "No log";
   document.getElementById("error").innerHTML = error.join("") || "No log";
   document.getElementById("all").innerHTML = all.join("") || "No log";
 
-  // render RIGHT
+  // ===== RENDER RIGHT =====
   document.getElementById("my-booking").innerHTML = myBooking.join("") || "No log";
   document.getElementById("my-prepare").innerHTML = myPrepare.join("") || "No log";
   document.getElementById("my-commit").innerHTML = myCommit.join("") || "No log";
@@ -184,8 +208,10 @@ async function loadLog() {
     "Cập nhật: " + new Date().toLocaleTimeString("vi-VN");
 }
 
+// AUTO LOAD
 loadLog();
 setInterval(loadLog, 10000);
+
 </script>
 
 </body>

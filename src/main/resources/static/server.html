@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -7,9 +6,7 @@
   <title>Server Log</title>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -19,17 +16,13 @@
       color: white;
     }
 
-    h1 {
-      color: #00ff66;
-      margin-bottom: 16px;
-    }
+    h1 { color: #00ff66; }
 
     .top-bar {
       display: flex;
       gap: 12px;
       align-items: center;
       margin-bottom: 20px;
-      flex-wrap: wrap;
     }
 
     button {
@@ -42,63 +35,43 @@
       cursor: pointer;
     }
 
-    button:hover {
-      opacity: 0.9;
+    .container {
+      display: flex;
+      gap: 20px;
     }
 
-    #lastUpdate {
-      color: #b5b5b5;
-      font-size: 14px;
+    .panel {
+      flex: 1;
+      background: #161b22;
+      padding: 16px;
+      border-radius: 12px;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+
+    .panel h2 {
+      color: #58a6ff;
     }
 
     .group {
-      margin-bottom: 20px;
-      padding: 14px;
-      border-radius: 12px;
-      max-height: 260px;
+      margin-bottom: 16px;
+      padding: 12px;
+      border-radius: 10px;
+      max-height: 220px;
       overflow-y: auto;
-      box-shadow: 0 0 10px rgba(0,0,0,0.35);
     }
 
-    .group h3 {
-      margin-top: 0;
-      position: sticky;
-      top: 0;
-      background: inherit;
-      padding-bottom: 8px;
-    }
-
-    .booking-group {
-      background: #08253d;
-      border-left: 5px solid #00bfff;
-    }
-
-    .prepare-group {
-      background: #3d3200;
-      border-left: 5px solid #ffe600;
-    }
-
-    .commit-group {
-      background: #00331f;
-      border-left: 5px solid #00ff66;
-    }
-
-    .error-group {
-      background: #3a0000;
-      border-left: 5px solid #ff4d4d;
-    }
-
-    .all-group {
-      background: #1f2937;
-      border-left: 5px solid #8b949e;
-    }
+    .booking-group { background: #08253d; border-left: 4px solid #00bfff; }
+    .prepare-group { background: #3d3200; border-left: 4px solid #ffe600; }
+    .commit-group { background: #00331f; border-left: 4px solid #00ff66; }
+    .error-group { background: #3a0000; border-left: 4px solid #ff4d4d; }
+    .all-group { background: #1f2937; border-left: 4px solid #8b949e; }
 
     .log {
-      font-family: Consolas, monospace;
+      font-family: Consolas;
       font-size: 13px;
-      padding: 6px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      word-break: break-word;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
     }
 
     .booking-log { color: #66ccff; }
@@ -106,222 +79,113 @@
     .commit-log { color: #00ff88; }
     .error-log { color: #ff6b6b; }
 
-    .empty {
-      color: #b5b5b5;
-      font-style: italic;
-    }
+    .empty { color: #aaa; font-style: italic; }
   </style>
-
 </head>
+
 <body>
 
-  <h1>🖥 Server Log (Tất cả server)</h1>
+<h1>🖥 Server Log Dashboard</h1>
 
-  <div class="top-bar">
-    <button onclick="loadLog()">🔄 Tải log</button>
-    <div id="lastUpdate">Chưa cập nhật</div>
+<div class="top-bar">
+  <button onclick="loadLog()">🔄 Tải log</button>
+  <div id="lastUpdate">Chưa cập nhật</div>
+</div>
+
+<div class="container">
+
+  <!-- ALL SERVERS -->
+  <div class="panel">
+    <h2>🌐 TẤT CẢ SERVER</h2>
+
+    <div class="group booking-group"><h3>Booking</h3><div id="booking"></div></div>
+    <div class="group prepare-group"><h3>PREPARE</h3><div id="prepare"></div></div>
+    <div class="group commit-group"><h3>COMMIT</h3><div id="commit"></div></div>
+    <div class="group error-group"><h3>ERROR</h3><div id="error"></div></div>
+    <div class="group all-group"><h3>ALL</h3><div id="all"></div></div>
   </div>
 
-  <div class="group booking-group">
-    <h3>📥 Booking Server</h3>
-    <div id="booking"></div>
+  <!-- MY SERVER -->
+  <div class="panel">
+    <h2>🟢 SERVER CỦA BẠN</h2>
+
+    <div class="group booking-group"><h3>Booking</h3><div id="my-booking"></div></div>
+    <div class="group prepare-group"><h3>PREPARE</h3><div id="my-prepare"></div></div>
+    <div class="group commit-group"><h3>COMMIT</h3><div id="my-commit"></div></div>
+    <div class="group error-group"><h3>ERROR</h3><div id="my-error"></div></div>
+    <div class="group all-group"><h3>ALL</h3><div id="my-all"></div></div>
   </div>
 
-  <div class="group prepare-group">
-    <h3>📦 PREPARE</h3>
-    <div id="prepare"></div>
-  </div>
+</div>
 
-  <div class="group commit-group">
-    <h3>✅ COMMIT / VOTE OK</h3>
-    <div id="commit"></div>
-  </div>
+<script>
+const CURRENT_SERVER = "Booking Server + server 3";
 
-  <div class="group error-group">
-    <h3>❌ ERROR / FAIL / ABORT</h3>
-    <div id="error"></div>
-  </div>
+const servers = [
+  { name: "Server 5", url: "https://dien-toan-lan-hai.onrender.com" },
+  { name: "Booking Server + server 3", url: "https://hotel-booking-system-new.onrender.com" },
+  { name: "Server 4", url: "https://dientoanck.onrender.com" },
+  { name: "Server 1", url: "https://demo2-75m2.onrender.com" }
+];
 
-  <div class="group all-group">
-    <h3>📋 Tất cả log</h3>
-    <div id="all"></div>
-  </div>
+async function loadLog() {
 
-  <script>
-  const servers = [
-    {
-      name: "Server 5",
-      url: "https://dien-toan-lan-hai.onrender.com"
-    },
-    {
-      name: "Booking Server + server 3",
-      url: "https://hotel-booking-system-new.onrender.com"
-    },
-    {
-      name: "Server 4",
-      url: "https://dientoanck.onrender.com"
-    },
-    {
-      name: "Server 1",
-      url: "https://demo2-75m2.onrender.com"
-    },
-   
-  ];
+  let booking=[], prepare=[], commit=[], error=[], all=[];
+  let myBooking=[], myPrepare=[], myCommit=[], myError=[], myAll=[];
 
-  function convertUTCToVN(log) {
-    const match = log.match(/\[(.*?)\]/);
-    if (!match) return log;
+  await Promise.all(servers.map(async s => {
+    try {
+      let res = await fetch(s.url + "/api/log?t=" + Date.now());
+      let data = await res.json();
 
-    const rawTime = match[1].trim();
-    let date = null;
+      data.reverse().forEach(log => {
+        let full = `[${s.name}] ${log}`;
+        let up = full.toUpperCase();
 
-    if (rawTime.includes("T") || rawTime.includes("Z")) {
-      date = new Date(rawTime);
-    } else if (/^\\d{4}-\\d{2}-\\d{2}/.test(rawTime)) {
-      date = new Date(rawTime.replace(" ", "T"));
-    }
+        all.unshift(`<div class="log">${full}</div>`);
 
-    if (!date || isNaN(date.getTime())) {
-      return log;
-    }
+        if(up.includes("BOOK")) booking.unshift(`<div class="log booking-log">${full}</div>`);
+        if(up.includes("PRE")) prepare.unshift(`<div class="log prepare-log">${full}</div>`);
+        if(up.includes("COMMIT")) commit.unshift(`<div class="log commit-log">${full}</div>`);
+        if(up.includes("ERROR")||up.includes("FAIL")) error.unshift(`<div class="log error-log">${full}</div>`);
 
-    const vnTime = date.toLocaleString("vi-VN", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      hour12: false
-    });
-
-    return log.replace("[" + rawTime + "]", "[" + vnTime + "]");
-  }
-
-  async function loadLog() {
-    ["booking", "prepare", "commit", "error", "all"].forEach(id => {
-      document.getElementById(id).innerHTML =
-        '<div class="empty">Đang tải...</div>';
-    });
-
-    const bookingLogs = [];
-    const prepareLogs = [];
-    const commitLogs = [];
-    const errorLogs = [];
-    const allLogs = [];
-
-    await Promise.all(
-      servers.map(async server => {
-        try {
-          const response = await fetch(
-            `${server.url}/api/log?t=${Date.now()}`,
-            {
-              method: "GET",
-              cache: "no-store"
-            }
-          );
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-
-          const data = await response.json();
-
-          if (!Array.isArray(data)) {
-            throw new Error("/api/log không trả về mảng");
-          }
-
-          if (data.length === 0) {
-            const msg = `<div class="log error-log">⚠️ [${server.name}] Không có log</div>`;
-            allLogs.unshift(msg);
-            return;
-          }
-
-          [...data].reverse().forEach(log => {
-            log = convertUTCToVN(log);
-
-            const fullLog = `[${server.name}] ${log}`;
-            const upper = fullLog.toUpperCase();
-
-            allLogs.unshift(
-              `<div class="log">${fullLog}</div>`
-            );
-
-            if (server.name === "Booking Server") {
-              bookingLogs.unshift(
-                `<div class="log booking-log">${fullLog}</div>`
-              );
-            }
-
-            if (upper.includes("PREPARE")) {
-              prepareLogs.unshift(
-                `<div class="log prepare-log">${fullLog}</div>`
-              );
-            }
-
-            if (
-              upper.includes("COMMIT") ||
-              upper.includes("VOTE OK") ||
-              upper.includes("BOOKING SUCCESS") ||
-              upper.includes("ĐẶT PHÒNG THÀNH CÔNG")
-            ) {
-              commitLogs.unshift(
-                `<div class="log commit-log">${fullLog}</div>`
-              );
-            }
-
-            if (
-              upper.includes("ERROR") ||
-              upper.includes("FAIL") ||
-              upper.includes("ABORT") ||
-              upper.includes("DOWN")
-            ) {
-              errorLogs.unshift(
-                `<div class="log error-log">${fullLog}</div>`
-              );
-            }
-          });
-
-        } catch (err) {
-          const message = `<div class="log error-log">❌ [${server.name}] Không thể tải log: ${err.message}</div>`;
-
-          errorLogs.unshift(message);
-          allLogs.unshift(message);
+        // LOCAL SERVER
+        if(s.name === CURRENT_SERVER){
+          myAll.unshift(`<div class="log">${full}</div>`);
+          if(up.includes("BOOK")) myBooking.unshift(`<div class="log booking-log">${full}</div>`);
+          if(up.includes("PRE")) myPrepare.unshift(`<div class="log prepare-log">${full}</div>`);
+          if(up.includes("COMMIT")) myCommit.unshift(`<div class="log commit-log">${full}</div>`);
+          if(up.includes("ERROR")||up.includes("FAIL")) myError.unshift(`<div class="log error-log">${full}</div>`);
         }
-      })
-    );
-
-    document.getElementById("booking").innerHTML =
-      bookingLogs.length
-        ? bookingLogs.join("")
-        : '<div class="empty">Không có log từ Booking Server</div>';
-
-    document.getElementById("prepare").innerHTML =
-      prepareLogs.length
-        ? prepareLogs.join("")
-        : '<div class="empty">Không có log PREPARE</div>';
-
-    document.getElementById("commit").innerHTML =
-      commitLogs.length
-        ? commitLogs.join("")
-        : '<div class="empty">Chưa có log COMMIT</div>';
-
-    document.getElementById("error").innerHTML =
-      errorLogs.length
-        ? errorLogs.join("")
-        : '<div class="empty">Không có log ERROR</div>';
-
-    document.getElementById("all").innerHTML =
-      allLogs.length
-        ? allLogs.join("")
-        : '<div class="empty">Không có log nào</div>';
-
-    document.getElementById("lastUpdate").innerText =
-      "Cập nhật lúc: " +
-      new Date().toLocaleTimeString("vi-VN", {
-        timeZone: "Asia/Ho_Chi_Minh"
       });
-  }
 
-  window.onload = () => {
-    loadLog();
-    setInterval(loadLog, 16000);
-  };
+    } catch(e){
+      let msg = `<div class="log error-log">❌ ${s.name} DOWN</div>`;
+      error.unshift(msg);
+      all.unshift(msg);
+    }
+  }));
+
+  // render LEFT
+  document.getElementById("booking").innerHTML = booking.join("") || "No log";
+  document.getElementById("prepare").innerHTML = prepare.join("") || "No log";
+  document.getElementById("commit").innerHTML = commit.join("") || "No log";
+  document.getElementById("error").innerHTML = error.join("") || "No log";
+  document.getElementById("all").innerHTML = all.join("") || "No log";
+
+  // render RIGHT
+  document.getElementById("my-booking").innerHTML = myBooking.join("") || "No log";
+  document.getElementById("my-prepare").innerHTML = myPrepare.join("") || "No log";
+  document.getElementById("my-commit").innerHTML = myCommit.join("") || "No log";
+  document.getElementById("my-error").innerHTML = myError.join("") || "No log";
+  document.getElementById("my-all").innerHTML = myAll.join("") || "No log";
+
+  document.getElementById("lastUpdate").innerText =
+    "Cập nhật: " + new Date().toLocaleTimeString("vi-VN");
+}
+
+loadLog();
+setInterval(loadLog, 10000);
 </script>
 
 </body>

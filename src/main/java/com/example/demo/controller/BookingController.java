@@ -19,34 +19,38 @@ public class BookingController {
     @Value("${server.id}")
     private String serverId;
 
-    // ✅ BOOK (2PC)
+    // ================= CLIENT =================
     @PostMapping("/book")
     public String book(@RequestBody Booking b) {
-        System.out.println("Nhận request /book: " + b.getName());
         service.book(b, serverId);
-        return "Booking thành công!";
+        return "Booking đang xử lý (4PC + Quorum)...";
     }
 
-    // ✅ PREPARE (Phase 1)
-    @PostMapping("/prepare")
-    public boolean prepare(@RequestBody Booking b) {
-        return service.prepare(b);
+    // ================= PHASE 1 =================
+    @PostMapping("/canCommit")
+    public boolean canCommit(@RequestBody Booking b) {
+        return service.canCommit(b);
     }
 
-    // ✅ COMMIT (Phase 2)
-    @PostMapping("/commit")
-    public String commit(@RequestBody Booking b) {
-        service.commit(b);
+    // ================= PHASE 2 =================
+    @PostMapping("/preCommit")
+    public boolean preCommit(@RequestBody Booking b) {
+        return service.preCommit(b);
+    }
+
+    // ================= PHASE 4 =================
+    @PostMapping("/doCommit")
+    public String doCommit(@RequestBody Booking b) {
+        service.doCommit(b);
         return "COMMIT OK";
     }
 
-    // ✅ LOG
+    // ================= DEBUG =================
     @GetMapping("/log")
     public List<String> logs() {
         return service.getLogs();
     }
 
-    // ✅ STATUS
     @GetMapping("/status")
     public Object status() {
         return service.getServerStatus();

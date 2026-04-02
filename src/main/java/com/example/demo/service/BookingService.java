@@ -6,11 +6,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CompletableFuture;
+import java.util.*;
+import java.util.concurrent.*;
 
 @Service
 public class BookingService {
@@ -19,6 +18,7 @@ public class BookingService {
     private BookingRepository repository;
 
     private List<String> logs = new ArrayList<>();
+
     private String[] otherServers = {
             "https://hotel-booking-system-new.onrender.com",
             "https://demo2-75m2.onrender.com",
@@ -26,6 +26,7 @@ public class BookingService {
     };
 
     private ConcurrentHashMap<String, Boolean> serverStatus = new ConcurrentHashMap<>();
+
     private int clock = 0;
 
     public BookingService() {
@@ -34,6 +35,7 @@ public class BookingService {
         }
     }
 
+    // ================= LAMPORT =================
     private synchronized int tick() {
         return ++clock;
     }
@@ -42,103 +44,124 @@ public class BookingService {
         clock = Math.max(clock, received) + 1;
     }
 
-    private String log(String type, String message) {
+    private String log(String phase, String msg) {
         String time = LocalTime.now().withNano(0).toString();
-        return "[" + time + "] [L=" + clock + "] [" + type + "] " + message;
+        return "[" + time + "] [L=" + clock + "] [" + phase + "] " + msg;
     }
 
+    // ================= MAIN 4PC =================
     public void book(Booking b, String serverId) {
         tick();
-        logs.add(log("CLIENT", "Nhận request đặt phòng: " + b.getName()));
         b.setLamportTime(clock);
+        logs.add(log("CLIENT", "Nhận booking: " + b.getName()));
 
-        // Chạy bất đồng bộ bằng CompletableFuture
         CompletableFuture.runAsync(() -> {
+
             RestTemplate restTemplate = createRestTemplate();
-            List<String> okServers = new ArrayList<>();
 
-            // ===== PHASE 1: PREPARE (Có Retry) =====
+            int total = otherServers.length + 1;
+            int quorum = (total / 2) + 1;
+
+            List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+
+            // ================= PHASE 1: CAN_COMMIT =================
             for (String url : otherServers) {
-                boolean success = false;
-                int retryCount = 0;
-                int maxRetries = 2; // Thử lại tối đa 2 lần
-
-                while (!success && retryCount <= maxRetries) {
+                futures.add(CompletableFuture.supplyAsync(() -> {
                     try {
                         tick();
-                        if (retryCount > 0)
-                            logs.add(log("2PC", "Thử lại lần " + retryCount + " tới " + url));
-                        else
-                            logs.add(log("2PC", "Gửi PREPARE tới " + url));
-
-                        Boolean res = restTemplate.postForObject(url + "/api/prepare", b, Boolean.class);
-
-                        if (Boolean.TRUE.equals(res)) {
-                            okServers.add(url);
-                            serverStatus.put(url, true);
-                            logs.add(log("2PC", "VOTE OK từ " + url));
-                            success = true;
-                        } else {
-                            logs.add(log("2PC", "VOTE FAIL từ " + url));
-                            success = true; // Nhận phản hồi rồi thì không retry
-                        }
+                        logs.add(log("P1", "CAN_COMMIT → " + url));
+                        Boolean res = restTemplate.postForObject(url + "/api/canCommit", b, Boolean.class);
+                        return Boolean.TRUE.equals(res);
                     } catch (Exception e) {
-                        retryCount++;
-                        if (retryCount > maxRetries) {
-                            serverStatus.put(url, false);
-                            logs.add(log("ERROR", "Server thực sự DOWN sau " + maxRetries + " lần thử: " + url));
-                        }
+                        serverStatus.put(url, false);
+                        logs.add(log("ERROR", "Server DOWN: " + url));
+                        return false;
                     }
-                }
+                }));
             }
 
-            // ===== QUYẾT ĐỊNH THEO QUORUM (ĐA SỐ) =====
-            // Tính toán: Chỉ cần >= 50% số server khác OK (hoặc tùy bạn chỉnh ngưỡng)
-            int threshold = (otherServers.length / 2);
+            int ok = 1; // local luôn OK
 
-            if (okServers.size() >= threshold) {
+            for (CompletableFuture<Boolean> f : futures) {
+                if (f.join())
+                    ok++;
+            }
+
+            if (ok < quorum) {
                 tick();
-                logs.add(log("2PC", "QUORUM ĐẠT (" + okServers.size() + "/" + otherServers.length + ") → COMMIT"));
+                logs.add(log("P1", "ABORT - Không đủ quorum (" + ok + "/" + total + ")"));
+                return;
+            }
 
-                // Commit local
-                repository.save(b);
-                logs.add(log("DATABASE", "Đã COMMIT local"));
+            tick();
+            logs.add(log("P1", "QUORUM OK (" + ok + "/" + total + ")"));
 
-                // Gửi Commit tới các server còn sống
-                for (String url : okServers) {
+            // ================= PHASE 2: PRE_COMMIT =================
+            for (String url : otherServers) {
+                CompletableFuture.runAsync(() -> {
                     try {
-                        restTemplate.postForObject(url + "/api/commit", b, String.class);
-                    } catch (Exception e) {
-                        logs.add(log("ERROR", "Không thể gửi COMMIT tới " + url + " (vẫn lưu local)"));
+                        tick();
+                        logs.add(log("P2", "PRE_COMMIT → " + url));
+                        restTemplate.postForObject(url + "/api/preCommit", b, Boolean.class);
+                    } catch (Exception ignored) {
                     }
-                }
-            } else {
-                tick();
-                logs.add(log("2PC", "ABORT: Không đủ số lượng server tối thiểu (Quorum fail)"));
+                });
+            }
+
+            // ================= PHASE 3: WAIT / NON-BLOCKING =================
+            try {
+                Thread.sleep(1000); // giả lập delay
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            tick();
+            logs.add(log("P3", "TIMEOUT → tự quyết định (non-blocking)"));
+
+            // ================= PHASE 4: DO_COMMIT =================
+            repository.save(b);
+            tick();
+            logs.add(log("P4", "COMMIT LOCAL"));
+
+            for (String url : otherServers) {
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        restTemplate.postForObject(url + "/api/doCommit", b, String.class);
+                    } catch (Exception ignored) {
+                    }
+                });
             }
         });
     }
 
-    private RestTemplate createRestTemplate() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(3000); // Tăng lên 3s cho Render
-        factory.setReadTimeout(3000);
-        return new RestTemplate(factory);
-    }
-
-    // Các hàm Prepare/Commit/GetLogs giữ nguyên như cũ
-    public boolean prepare(Booking b) {
+    // ================= API HANDLER =================
+    public boolean canCommit(Booking b) {
         updateClock(b.getLamportTime());
-        logs.add(log("2PC", "Nhận PREPARE"));
+        tick();
+        logs.add(log("P1", "Nhận CAN_COMMIT"));
         return true;
     }
 
-    public void commit(Booking b) {
+    public boolean preCommit(Booking b) {
         updateClock(b.getLamportTime());
-        logs.add(log("2PC", "Nhận COMMIT"));
+        tick();
+        logs.add(log("P2", "Nhận PRE_COMMIT"));
+        return true;
+    }
+
+    public void doCommit(Booking b) {
+        updateClock(b.getLamportTime());
         repository.save(b);
         tick();
-        logs.add(log("DATABASE", "Đã COMMIT vào DB"));
+        logs.add(log("P4", "Nhận DO_COMMIT → lưu DB"));
+    }
+
+    // ================= UTIL =================
+    private RestTemplate createRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5000);
+        factory.setReadTimeout(5000);
+        return new RestTemplate(factory);
     }
 
     public List<String> getLogs() {

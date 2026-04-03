@@ -228,7 +228,7 @@ const msg = `<div class="log error-log">❌ [${server.name}] Lỗi: ${err.messag
     document.getElementById("lastUpdate").innerText = "Cập nhật: " + new Date().toLocaleTimeString("vi-VN");
   }
 
-  window.onload = () => { loadLog(); setInterval(loadLog, 16000); };
+  window.onload = () => { loadLog(); setInterval(loadLog, 100000); };
 </script>
 </body>
 </html>

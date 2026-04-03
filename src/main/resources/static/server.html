@@ -2,378 +2,233 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Server Log</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Server Log - 4-Phase Commit (4PC)</title>
 
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
       padding: 20px;
-      font-family: Arial;
+      font-family: Arial, sans-serif;
       background: #0d1117;
       color: white;
     }
 
-    h1 { color: #00ff66; }
+    h1 {
+      color: #00ff66;
+      margin-bottom: 16px;
+    }
 
     .top-bar {
       display: flex;
-      gap: 10px;
+      gap: 12px;
+      align-items: center;
       margin-bottom: 20px;
+      flex-wrap: wrap;
     }
 
     button {
-      padding: 10px 16px;
+      padding: 10px 18px;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       background: #00ff66;
+      color: black;
       font-weight: bold;
       cursor: pointer;
     }
 
-    /* ===== SIMULATION ===== */
-    .simulation {
-      display: flex;
-      gap: 15px;
-      margin-bottom: 20px;
-      position: relative;
+    button:hover {
+      opacity: 0.9;
     }
 
-    .server-box {
-      flex: 1;
-      background: #161b22;
-      border-radius: 12px;
-      padding: 12px;
-      text-align: center;
-      transition: 0.3s;
-      position: relative;
-    }
-
-    .server-box.send { border: 2px solid #00ff66; }
-    .server-box.receive { border: 2px solid #00bfff; }
-    .server-box.wait { border: 2px solid #888; }
-    .server-box.error { border: 2px solid red; }
-
-    /* ICON */
-    .icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      margin: auto;
-      margin-bottom: 6px;
-    }
-
-    .icon.s1 { background:#3b82f6; }
-    .icon.s2 { background:#10b981; }
-    .icon.s3 { background:#f59e0b; }
-    .icon.s4 { background:#8b5cf6; }
-    .icon.s5 { background:#ef4444; }
-
-    /* 💥 BLINK (NHẬN) */
-    @keyframes blink {
-      0% { transform: scale(1); box-shadow: 0 0 0px #00bfff; }
-      50% { transform: scale(1.15); box-shadow: 0 0 25px #00bfff; }
-      100% { transform: scale(1); box-shadow: 0 0 0px #00bfff; }
-    }
-
-    .blink {
-      animation: blink 0.8s ease-in-out 2;
-    }
-
-    /* ➝ LINE ANIMATION */
-    .line {
-      position: absolute;
-      height: 3px;
-      background: #00ff66;
-      animation: moveLine 0.6s linear;
-    }
-
-    @keyframes moveLine {
-      from { width: 0; opacity: 1; }
-      to { width: 100%; opacity: 0; }
-    }
-
-    .lamport {
-      font-size: 26px;
-      font-weight: bold;
-      margin: 10px 0;
-    }
-
-    .status {
-      font-size: 13px;
-      margin-bottom: 8px;
-    }
-
-    .activity {
-      font-size: 11px;
-      text-align: left;
-      max-height: 60px;
-      overflow: hidden;
-    }
-
-    /* ===== ORIGINAL UI ===== */
-
-    .container {
-      display: flex;
-      gap: 20px;
-    }
-
-    .panel {
-      flex: 1;
-      background: #161b22;
-      padding: 12px;
-      border-radius: 10px;
-      max-height: 85vh;
-      overflow-y: auto;
+    #lastUpdate {
+      color: #b5b5b5;
+      font-size: 14px;
     }
 
     .group {
-      margin-bottom: 14px;
-      padding: 10px;
-      border-radius: 8px;
-      max-height: 220px;
+      margin-bottom: 20px;
+      padding: 14px;
+      border-radius: 12px;
+      max-height: 260px;
       overflow-y: auto;
+      box-shadow: 0 0 10px rgba(0,0,0,0.35);
     }
 
-    .booking-group { background:#08253d; border-left:4px solid #00bfff;}
-    .prepare-group { background:#3d3200; border-left:4px solid #ffe600;}
-    .commit-group { background:#00331f; border-left:4px solid #00ff66;}
-    .error-group { background:#3a0000; border-left:4px solid #ff4d4d;}
-    .all-group { background:#1f2937; border-left:4px solid #8b949e;}
-
-    .log {
-      font-family: Consolas;
-      font-size: 13px;
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+    .group h3 {
+      margin-top: 0;
+      position: sticky;
+      top: 0;
+      background: inherit;
+      padding-bottom: 8px;
     }
 
-    .booking-log { color:#66ccff; }
-    .prepare-log { color:#ffe066; }
-    .commit-log { color:#00ff88; }
-    .error-log { color:#ff6b6b; }
+    .booking-group { background: #08253d; border-left: 5px solid #00bfff; }
+    .prepare-group { background: #3d3200; border-left: 5px solid #ffe600; }
+    .precommit-group { background: #3d1a00; border-left: 5px solid #ff8c00; } /* Màu cam cho Pre-commit */
+    .commit-group { background: #00331f; border-left: 5px solid #00ff66; }
+    .error-group { background: #3a0000; border-left: 5px solid #ff4d4d; }
+    .all-group { background: #1f2937; border-left: 5px solid #8b949e; }
 
+    .log { font-family: Consolas, monospace; font-size: 13px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.08); word-break: break-word; }
+
+   .booking-log { color: #66ccff; }
+    .prepare-log { color: #ffe066; }
+    .precommit-log { color: #ffa500; }
+    .commit-log { color: #00ff88; }
+    .error-log { color: #ff6b6b; }
+    .empty { color: #b5b5b5; font-style: italic; }
   </style>
 </head>
-
 <body>
 
-<h1>🖥 Server Log Dashboard</h1>
+  <h1>🖥 Server Log (Giao thức 4PC)</h1>
 
-<div class="top-bar">
-  <button onclick="loadLog()">🔄 Reload</button>
-  <div id="lastUpdate">Chưa cập nhật</div>
-</div>
-
-<div id="simulation" class="simulation"></div>
-
-<div class="container">
-
-  <div class="panel">
-    <h2>🌐 ALL SERVERS</h2>
-    <div class="group booking-group"><h3>Booking</h3><div id="booking"></div></div>
-    <div class="group prepare-group"><h3>PREPARE</h3><div id="prepare"></div></div>
-    <div class="group commit-group"><h3>COMMIT</h3><div id="commit"></div></div>
-    <div class="group error-group"><h3>ERROR</h3><div id="error"></div></div>
-    <div class="group all-group"><h3>ALL</h3><div id="all"></div></div>
+  <div class="top-bar">
+    <button onclick="loadLog()">🔄 Tải log mới</button>
+    <div id="lastUpdate">Chưa cập nhật</div>
   </div>
 
-  <div class="panel">
-    <h2 id="myServerTitle">🟢 MY SERVER</h2>
-    <div class="group booking-group"><h3>Booking</h3><div id="my-booking"></div></div>
-    <div class="group prepare-group"><h3>PREPARE</h3><div id="my-prepare"></div></div>
-    <div class="group commit-group"><h3>COMMIT</h3><div id="my-commit"></div></div>
-    <div class="group error-group"><h3>ERROR</h3><div id="my-error"></div></div>
-    <div class="group all-group"><h3>ALL</h3><div id="my-all"></div></div>
+  <div class="group booking-group">
+    <h3>📥 Booking Server (Điều phối viên)</h3>
+    <div id="booking"></div>
   </div>
 
+  <div class="group prepare-group">
+    <h3>📦 PHA 1: PREPARE / VOTE</h3>
+    <div id="prepare"></div>
+  </div>
+
+  <div class="group precommit-group">
+    <h3>🟠 PHA 2: PRE-COMMIT (Tạm lưu)</h3>
+    <div id="precommit"></div>
+  </div>
+
+  <div class="group commit-group">
+    <h3>✅ PHA 3 & 4: COMMIT / ACK</h3>
+    <div id="commit"></div>
+  </div>
+
+  <div class="group error-group">
+    <h3>❌ ERROR / FAIL / ABORT</h3>
+    <div id="error"></div>
+  </div>
+
+  <div class="group all-group">
+    <h3>📋 Toàn bộ lịch sử Log</h3>
+    <div id="all"></div>
 </div>
 
-<script>
+  <script>
+  const servers = [
+    {
+      name: "Server 5",
+      url: "https://dien-toan-lan-hai.onrender.com"
+    },
+    {
+      name: "Booking Server",
+      url: "https://hotel-booking-system-new.onrender.com"
+    },
+    {
+      name: "Server 4",
+      url: "https://dientoanck.onrender.com"
+    },
+    {
+      name: "Server 1",
+      url: "https://demo2-75m2.onrender.com"
+    },
+   
+  ];
 
-const servers = [
-  { name: "Server 5", url: "https://dien-toan-lan-hai.onrender.com" },
-  { name: "Booking Server + server 3", url: "https://hotel-booking-system-new.onrender.com" },
-  { name: "Server 4", url: "https://dientoanck.onrender.com" },
-  { name: "Server 1", url: "https://demo2-75m2.onrender.com" }
-];
-
-const CURRENT_URL = window.location.origin;
-
-function getCurrentServerName() {
-  const found = servers.find(s =>
-    CURRENT_URL.includes(new URL(s.url).hostname)
-  );
-  return found ? found.name : "UNKNOWN";
-}
-
-const CURRENT_SERVER = getCurrentServerName();
-document.getElementById("myServerTitle").innerText =
-  "🟢 " + CURRENT_SERVER;
-
-
-// ===== SIMULATION =====
-function renderSimulation(allLogsRaw) {
-
-  const sim = document.getElementById("simulation");
-  sim.innerHTML = "";
-
-  const states = {};
-  let lastSend = null;
-
-  servers.forEach((s, i) => {
-    states[s.name] = { lamport: 0, status: "Chờ", logs: [], index: i };
-  });
-
-  allLogsRaw.forEach(logHtml => {
-
-    const text = logHtml.replace(/<[^>]+>/g, '');
-
-    const serverMatch = text.match(/\[(.*?)\]/);
-    if (!serverMatch) return;
-
-    const server = serverMatch[1];
-    if (!states[server]) return;
-
-    const lamportMatch = text.match(/\[L=(\d+)\]/);
-    if (lamportMatch) states[server].lamport = parseInt(lamportMatch[1]);
-
-    if (text.includes("→")) {
-      states[server].status = "Đang gửi";
-      lastSend = { from: server };
-    }
-    else if (text.includes("Nhận")) {
-      states[server].status = "Đang nhận";
-      if (lastSend) lastSend.to = server;
-    }
-    else if (text.includes("ERROR") || text.includes("ABORT")) {
-      states[server].status = "Lỗi";
-    }
-
-    states[server].logs.unshift(text);
-  });
-
-  Object.entries(states).forEach(([name, s], i) => {
-
-    let cls = "server-box wait";
-    let blink = "";
-
-    if (s.status === "Đang gửi") cls = "server-box send";
-    if (s.status === "Đang nhận") {
-      cls = "server-box receive";
-      blink = "blink"; // 💥 nhấp nháy server NHẬN
-    }
-    if (s.status === "Lỗi") cls = "server-box error";
-
-    sim.innerHTML += `
-      <div class="${cls} ${blink}" id="sv-${i}">
-        <div class="icon s${i+1}"></div>
-        <h3>${name}</h3>
-        <div class="lamport">${s.lamport}</div>
-        <div class="status">${s.status}</div>
-        <div class="activity">${s.logs.slice(0,2).join("<br>")}</div>
-      </div>
-    `;
-  });
-
-  // animation line
-  if (lastSend && lastSend.to) {
-    const from = states[lastSend.from].index;
-    const to = states[lastSend.to].index;
-
-    const fromEl = document.getElementById("sv-" + from);
-    const toEl = document.getElementById("sv-" + to);
-
-    if (fromEl && toEl) {
-      const line = document.createElement("div");
-      line.className = "line";
-
-      line.style.top = fromEl.offsetTop + 40 + "px";
-      line.style.left = fromEl.offsetLeft + 50 + "px";
-      line.style.width = (toEl.offsetLeft - fromEl.offsetLeft) + "px";
-
-      sim.appendChild(line);
-      setTimeout(() => line.remove(), 600);
-    }
+  function convertUTCToVN(log) {
+    const match = log.match(/\[(.*?)\]/);
+    if (!match) return log;
+    const rawTime = match[1].trim();
+    let date = new Date(rawTime);
+    if (isNaN(date.getTime())) return log;
+    return log.replace("[" + rawTime + "]", "[" + date.toLocaleString("vi-VN", {timeZone: "Asia/Ho_Chi_Minh", hour12: false}) + "]");
   }
-}
 
+  async function loadLog() {
+    // Thêm precommit vào danh sách reset
+    ["booking", "prepare", "precommit", "commit", "error", "all"].forEach(id => {
+      document.getElementById(id).innerHTML = '<div class="empty">Đang tải...</div>';
+    });
 
-// ===== ORIGINAL =====
-async function loadLog() {
+    const bookingLogs = [];
+    const prepareLogs = [];
+    const precommitLogs = []; // Array mới
+    const commitLogs = [];
+    const errorLogs = [];
+    const allLogs = [];
 
-  let booking=[], prepare=[], commit=[], error=[], all=[];
-  let myBooking=[], myPrepare=[], myCommit=[], myError=[], myAll=[];
+    await Promise.all(
+      servers.map(async server => {
+        try {
+          const response = await fetch(`${server.url}/api/log?t=${Date.now()}`, { cache: "no-store" });
+          const data = await response.json();
+          if (!Array.isArray(data)) return;
 
-  await Promise.all(servers.map(async s => {
-    try {
-      let res = await fetch(s.url + "/api/log?t=" + Date.now());
-      let data = await res.json();
+          [...data].reverse().forEach(log => {
+            log = convertUTCToVN(log);
+            const fullLog = `[${server.name}] ${log}`;
+            const upper = fullLog.toUpperCase();
 
-      data.reverse().forEach(log => {
+            allLogs.unshift(`<div class="log">${fullLog}</div>`);
 
-        let full = `[${s.name}] ${log}`;
-        let up = full.toUpperCase();
+            if (server.name === "Booking Server") {
+              bookingLogs.unshift(`<div class="log booking-log">${fullLog}</div>`);
+            }
 
-        all.unshift(`<div class="log">${full}</div>`);
+            // LỌC PHA 1
+            if (upper.includes("PREPARE") || upper.includes("VOTE")) {
+              prepareLogs.unshift(`<div class="log prepare-log">${fullLog}</div>`);
+            }
 
-        if(up.includes("BOOK")) booking.unshift(`<div class="log booking-log">${full}</div>`);
-        if(up.includes("CAN_COMMIT") || up.includes("PRE_COMMIT"))
-          prepare.unshift(`<div class="log prepare-log">${full}</div>`);
-        if(up.includes("COMMIT"))
-          commit.unshift(`<div class="log commit-log">${full}</div>`);
-        if(up.includes("ERROR")||up.includes("FAIL")||up.includes("ABORT"))
-          error.unshift(`<div class="log error-log">${full}</div>`);
+            // LỌC PHA 2: PRE-COMMIT (MỚI)
+            if (upper.includes("PRE-COMMIT") || upper.includes("PRECOMMIT") || upper.includes("PRE_ACK")) {
+              precommitLogs.unshift(`<div class="log precommit-log">${fullLog}</div>`);
+            }
 
-        if(s.name === CURRENT_SERVER){
+            // LỌC PHA 3 & 4
+            if (
+              upper.includes("COMMIT") || 
+              upper.includes("SUCCESS") || 
+              upper.includes("ACK") || 
+              upper.includes("HOÀN TẤT")
+            ) {
+              commitLogs.unshift(`<div class="log commit-log">${fullLog}</div>`);
+            }
 
-          myAll.unshift(`<div class="log">${full}</div>`);
-
-          if(up.includes("BOOK"))
-            myBooking.unshift(`<div class="log booking-log">${full}</div>`);
-
-          if(up.includes("CAN_COMMIT") || up.includes("PRE_COMMIT"))
-            myPrepare.unshift(`<div class="log prepare-log">${full}</div>`);
-
-          if(up.includes("COMMIT"))
-            myCommit.unshift(`<div class="log commit-log">${full}</div>`);
-
-          if(up.includes("ERROR")||up.includes("FAIL")||up.includes("ABORT"))
-            myError.unshift(`<div class="log error-log">${full}</div>`);
+            // LỌC LỖI
+            if (upper.includes("ERROR") || upper.includes("FAIL") || upper.includes("ABORT")) {
+              errorLogs.unshift(`<div class="log error-log">${fullLog}</div>`);
+            }
+          });
+        } catch (err) {
+const msg = `<div class="log error-log">❌ [${server.name}] Lỗi: ${err.message}</div>`;
+          errorLogs.unshift(msg);
+          allLogs.unshift(msg);
         }
+      })
+    );
 
-      });
+    // Render dữ liệu ra giao diện
+    document.getElementById("booking").innerHTML = bookingLogs.join("") || '<div class="empty">Trống</div>';
+    document.getElementById("prepare").innerHTML = prepareLogs.join("") || '<div class="empty">Trống</div>';
+    document.getElementById("precommit").innerHTML = precommitLogs.join("") || '<div class="empty">Chưa có log PRE-COMMIT</div>';
+    document.getElementById("commit").innerHTML = commitLogs.join("") || '<div class="empty">Trống</div>';
+    document.getElementById("error").innerHTML = errorLogs.join("") || '<div class="empty">Trống</div>';
+    document.getElementById("all").innerHTML = allLogs.join("") || '<div class="empty">Trống</div>';
 
-    } catch(e){
-      let msg = `<div class="log error-log">❌ ${s.name} DOWN</div>`;
-      error.unshift(msg);
-      all.unshift(msg);
-    }
-  }));
+    document.getElementById("lastUpdate").innerText = "Cập nhật: " + new Date().toLocaleTimeString("vi-VN");
+  }
 
-  document.getElementById("booking").innerHTML = booking.join("") || "No log";
-  document.getElementById("prepare").innerHTML = prepare.join("") || "No log";
-  document.getElementById("commit").innerHTML = commit.join("") || "No log";
-  document.getElementById("error").innerHTML = error.join("") || "No log";
-  document.getElementById("all").innerHTML = all.join("") || "No log";
-
-  document.getElementById("my-booking").innerHTML = myBooking.join("") || "No log";
-  document.getElementById("my-prepare").innerHTML = myPrepare.join("") || "No log";
-  document.getElementById("my-commit").innerHTML = myCommit.join("") || "No log";
-  document.getElementById("my-error").innerHTML = myError.join("") || "No log";
-  document.getElementById("my-all").innerHTML = myAll.join("") || "No log";
-
-  document.getElementById("lastUpdate").innerText =
-    "Cập nhật: " + new Date().toLocaleTimeString("vi-VN");
-
-  renderSimulation(all);
-}
-
-loadLog();
-setInterval(loadLog, 10000);
-
+  window.onload = () => { loadLog(); setInterval(loadLog, 16000); };
 </script>
-
 </body>
 </html>

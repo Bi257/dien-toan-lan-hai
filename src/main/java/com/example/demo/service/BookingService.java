@@ -20,7 +20,7 @@ public class BookingService {
     private List<String> logs = Collections.synchronizedList(new ArrayList<>());
 
     private String[] otherServers = {
-            "https://dien-toan-lan-hai.onrender.com",
+            "https://hotel-booking-system-new.onrender.com",
             "https://dientoanck.onrender.com",
             "https://demo2-75m2.onrender.com"
     };

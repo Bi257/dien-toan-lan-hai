@@ -70,18 +70,18 @@
     .icon.s4 { background:#8b5cf6; }
     .icon.s5 { background:#ef4444; }
 
-    /* BLINK */
+    /* 💥 BLINK (NHẬN) */
     @keyframes blink {
-      0% { box-shadow: 0 0 0px #00ff66; }
-      50% { box-shadow: 0 0 20px #00ff66; }
-      100% { box-shadow: 0 0 0px #00ff66; }
+      0% { transform: scale(1); box-shadow: 0 0 0px #00bfff; }
+      50% { transform: scale(1.15); box-shadow: 0 0 25px #00bfff; }
+      100% { transform: scale(1); box-shadow: 0 0 0px #00bfff; }
     }
 
     .blink {
-      animation: blink 1s infinite;
+      animation: blink 0.8s ease-in-out 2;
     }
 
-    /* LINE */
+    /* ➝ LINE ANIMATION */
     .line {
       position: absolute;
       height: 3px;
@@ -112,7 +112,7 @@
       overflow: hidden;
     }
 
-    /* ===== ORIGINAL ===== */
+    /* ===== ORIGINAL UI ===== */
 
     .container {
       display: flex;
@@ -154,7 +154,6 @@
     .commit-log { color:#00ff88; }
     .error-log { color:#ff6b6b; }
 
-    .empty { color:#aaa; font-style: italic; }
   </style>
 </head>
 
@@ -167,12 +166,10 @@
   <div id="lastUpdate">Chưa cập nhật</div>
 </div>
 
-<!-- SIMULATION -->
 <div id="simulation" class="simulation"></div>
 
 <div class="container">
 
-  <!-- ALL SERVERS -->
   <div class="panel">
     <h2>🌐 ALL SERVERS</h2>
     <div class="group booking-group"><h3>Booking</h3><div id="booking"></div></div>
@@ -182,7 +179,6 @@
     <div class="group all-group"><h3>ALL</h3><div id="all"></div></div>
   </div>
 
-  <!-- MY SERVER -->
   <div class="panel">
     <h2 id="myServerTitle">🟢 MY SERVER</h2>
     <div class="group booking-group"><h3>Booking</h3><div id="my-booking"></div></div>
@@ -217,7 +213,7 @@ document.getElementById("myServerTitle").innerText =
   "🟢 " + CURRENT_SERVER;
 
 
-// ===== ADD: SIMULATION =====
+// ===== SIMULATION =====
 function renderSimulation(allLogsRaw) {
 
   const sim = document.getElementById("simulation");
@@ -227,12 +223,7 @@ function renderSimulation(allLogsRaw) {
   let lastSend = null;
 
   servers.forEach((s, i) => {
-    states[s.name] = {
-      lamport: 0,
-      status: "Chờ",
-      logs: [],
-      index: i
-    };
+    states[s.name] = { lamport: 0, status: "Chờ", logs: [], index: i };
   });
 
   allLogsRaw.forEach(logHtml => {
@@ -246,9 +237,7 @@ function renderSimulation(allLogsRaw) {
     if (!states[server]) return;
 
     const lamportMatch = text.match(/\[L=(\d+)\]/);
-    if (lamportMatch) {
-      states[server].lamport = parseInt(lamportMatch[1]);
-    }
+    if (lamportMatch) states[server].lamport = parseInt(lamportMatch[1]);
 
     if (text.includes("→")) {
       states[server].status = "Đang gửi";
@@ -270,11 +259,11 @@ function renderSimulation(allLogsRaw) {
     let cls = "server-box wait";
     let blink = "";
 
-    if (s.status === "Đang gửi") {
-      cls = "server-box send";
-      blink = "blink";
+    if (s.status === "Đang gửi") cls = "server-box send";
+    if (s.status === "Đang nhận") {
+      cls = "server-box receive";
+      blink = "blink"; // 💥 nhấp nháy server NHẬN
     }
-    if (s.status === "Đang nhận") cls = "server-box receive";
     if (s.status === "Lỗi") cls = "server-box error";
 
     sim.innerHTML += `
@@ -283,14 +272,12 @@ function renderSimulation(allLogsRaw) {
         <h3>${name}</h3>
         <div class="lamport">${s.lamport}</div>
         <div class="status">${s.status}</div>
-        <div class="activity">
-          ${s.logs.slice(0,2).join("<br>")}
-        </div>
+        <div class="activity">${s.logs.slice(0,2).join("<br>")}</div>
       </div>
     `;
   });
 
-  // draw line animation
+  // animation line
   if (lastSend && lastSend.to) {
     const from = states[lastSend.from].index;
     const to = states[lastSend.to].index;
@@ -307,15 +294,13 @@ function renderSimulation(allLogsRaw) {
       line.style.width = (toEl.offsetLeft - fromEl.offsetLeft) + "px";
 
       sim.appendChild(line);
-
       setTimeout(() => line.remove(), 600);
     }
   }
 }
-// ===== END ADD =====
 
 
-// ===== ORIGINAL loadLog =====
+// ===== ORIGINAL =====
 async function loadLog() {
 
   let booking=[], prepare=[], commit=[], error=[], all=[];

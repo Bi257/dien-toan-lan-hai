@@ -32,11 +32,12 @@
       cursor: pointer;
     }
 
-    /* ===== NEW: SIMULATION ===== */
+    /* ===== SIMULATION ===== */
     .simulation {
       display: flex;
       gap: 15px;
       margin-bottom: 20px;
+      position: relative;
     }
 
     .server-box {
@@ -46,12 +47,52 @@
       padding: 12px;
       text-align: center;
       transition: 0.3s;
+      position: relative;
     }
 
     .server-box.send { border: 2px solid #00ff66; }
     .server-box.receive { border: 2px solid #00bfff; }
     .server-box.wait { border: 2px solid #888; }
     .server-box.error { border: 2px solid red; }
+
+    /* ICON */
+    .icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin: auto;
+      margin-bottom: 6px;
+    }
+
+    .icon.s1 { background:#3b82f6; }
+    .icon.s2 { background:#10b981; }
+    .icon.s3 { background:#f59e0b; }
+    .icon.s4 { background:#8b5cf6; }
+    .icon.s5 { background:#ef4444; }
+
+    /* BLINK */
+    @keyframes blink {
+      0% { box-shadow: 0 0 0px #00ff66; }
+      50% { box-shadow: 0 0 20px #00ff66; }
+      100% { box-shadow: 0 0 0px #00ff66; }
+    }
+
+    .blink {
+      animation: blink 1s infinite;
+    }
+
+    /* LINE */
+    .line {
+      position: absolute;
+      height: 3px;
+      background: #00ff66;
+      animation: moveLine 0.6s linear;
+    }
+
+    @keyframes moveLine {
+      from { width: 0; opacity: 1; }
+      to { width: 100%; opacity: 0; }
+    }
 
     .lamport {
       font-size: 26px;
@@ -70,7 +111,8 @@
       max-height: 60px;
       overflow: hidden;
     }
-    /* ===== END NEW ===== */
+
+    /* ===== ORIGINAL ===== */
 
     .container {
       display: flex;
@@ -125,16 +167,14 @@
   <div id="lastUpdate">Chưa cập nhật</div>
 </div>
 
-<!-- ===== NEW: SIMULATION UI ===== -->
+<!-- SIMULATION -->
 <div id="simulation" class="simulation"></div>
-<!-- ===== END NEW ===== -->
 
 <div class="container">
 
   <!-- ALL SERVERS -->
   <div class="panel">
     <h2>🌐 ALL SERVERS</h2>
-
     <div class="group booking-group"><h3>Booking</h3><div id="booking"></div></div>
     <div class="group prepare-group"><h3>PREPARE</h3><div id="prepare"></div></div>
     <div class="group commit-group"><h3>COMMIT</h3><div id="commit"></div></div>
@@ -145,7 +185,6 @@
   <!-- MY SERVER -->
   <div class="panel">
     <h2 id="myServerTitle">🟢 MY SERVER</h2>
-
     <div class="group booking-group"><h3>Booking</h3><div id="my-booking"></div></div>
     <div class="group prepare-group"><h3>PREPARE</h3><div id="my-prepare"></div></div>
     <div class="group commit-group"><h3>COMMIT</h3><div id="my-commit"></div></div>
@@ -157,7 +196,6 @@
 
 <script>
 
-// ===== SERVER LIST =====
 const servers = [
   { name: "Server 5", url: "https://dien-toan-lan-hai.onrender.com" },
   { name: "Booking Server + server 3", url: "https://hotel-booking-system-new.onrender.com" },
@@ -165,7 +203,6 @@ const servers = [
   { name: "Server 1", url: "https://demo2-75m2.onrender.com" }
 ];
 
-// ===== AUTO DETECT CURRENT SERVER =====
 const CURRENT_URL = window.location.origin;
 
 function getCurrentServerName() {
@@ -180,19 +217,21 @@ document.getElementById("myServerTitle").innerText =
   "🟢 " + CURRENT_SERVER;
 
 
-// ===== NEW: SIMULATION FUNCTION =====
+// ===== ADD: SIMULATION =====
 function renderSimulation(allLogsRaw) {
 
   const sim = document.getElementById("simulation");
   sim.innerHTML = "";
 
   const states = {};
+  let lastSend = null;
 
-  servers.forEach(s => {
+  servers.forEach((s, i) => {
     states[s.name] = {
       lamport: 0,
       status: "Chờ",
-      logs: []
+      logs: [],
+      index: i
     };
   });
 
@@ -213,41 +252,70 @@ function renderSimulation(allLogsRaw) {
 
     if (text.includes("→")) {
       states[server].status = "Đang gửi";
-    } else if (text.includes("Nhận")) {
+      lastSend = { from: server };
+    }
+    else if (text.includes("Nhận")) {
       states[server].status = "Đang nhận";
-    } else if (text.includes("COMMIT")) {
-      states[server].status = "Hoàn thành";
-    } else if (text.includes("ERROR") || text.includes("ABORT")) {
+      if (lastSend) lastSend.to = server;
+    }
+    else if (text.includes("ERROR") || text.includes("ABORT")) {
       states[server].status = "Lỗi";
     }
 
     states[server].logs.unshift(text);
   });
 
-  Object.entries(states).forEach(([name, s]) => {
+  Object.entries(states).forEach(([name, s], i) => {
 
     let cls = "server-box wait";
+    let blink = "";
 
-    if (s.status === "Đang gửi") cls = "server-box send";
+    if (s.status === "Đang gửi") {
+      cls = "server-box send";
+      blink = "blink";
+    }
     if (s.status === "Đang nhận") cls = "server-box receive";
     if (s.status === "Lỗi") cls = "server-box error";
 
     sim.innerHTML += `
-      <div class="${cls}">
+      <div class="${cls} ${blink}" id="sv-${i}">
+        <div class="icon s${i+1}"></div>
         <h3>${name}</h3>
         <div class="lamport">${s.lamport}</div>
-        <div class="status">Trạng thái: ${s.status}</div>
+        <div class="status">${s.status}</div>
         <div class="activity">
-          ${s.logs.slice(0,3).join("<br>")}
+          ${s.logs.slice(0,2).join("<br>")}
         </div>
       </div>
     `;
   });
+
+  // draw line animation
+  if (lastSend && lastSend.to) {
+    const from = states[lastSend.from].index;
+    const to = states[lastSend.to].index;
+
+    const fromEl = document.getElementById("sv-" + from);
+    const toEl = document.getElementById("sv-" + to);
+
+    if (fromEl && toEl) {
+      const line = document.createElement("div");
+      line.className = "line";
+
+      line.style.top = fromEl.offsetTop + 40 + "px";
+      line.style.left = fromEl.offsetLeft + 50 + "px";
+      line.style.width = (toEl.offsetLeft - fromEl.offsetLeft) + "px";
+
+      sim.appendChild(line);
+
+      setTimeout(() => line.remove(), 600);
+    }
+  }
 }
-// ===== END NEW =====
+// ===== END ADD =====
 
 
-// ===== LOAD LOG =====
+// ===== ORIGINAL loadLog =====
 async function loadLog() {
 
   let booking=[], prepare=[], commit=[], error=[], all=[];
@@ -314,7 +382,6 @@ async function loadLog() {
   document.getElementById("lastUpdate").innerText =
     "Cập nhật: " + new Date().toLocaleTimeString("vi-VN");
 
-  // ===== NEW CALL =====
   renderSimulation(all);
 }
 

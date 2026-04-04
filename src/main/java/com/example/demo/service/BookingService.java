@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class BookingService {
@@ -28,13 +29,11 @@ public class BookingService {
     };
 
     private ConcurrentHashMap<String, Boolean> serverStatus = new ConcurrentHashMap<>();
-
-    // 🔥 Lưu các commit bị fail để recovery
     private ConcurrentHashMap<String, List<Booking>> pendingCommits = new ConcurrentHashMap<>();
 
     private ExecutorService executor = Executors.newFixedThreadPool(5);
 
-    private int clock = 0;
+    private AtomicInteger clock = new AtomicInteger(0);
 
     public BookingService() {
         for (String url : otherServers) {
@@ -43,151 +42,131 @@ public class BookingService {
     }
 
     // ================= LAMPORT =================
-    private synchronized int tick() {
-        return ++clock;
+    private int tick() {
+        return clock.incrementAndGet();
     }
 
-    private synchronized void updateClock(int received) {
-        clock = Math.max(clock, received) + 1;
+    private void updateClock(int received) {
+        clock.updateAndGet(c -> Math.max(c, received) + 1);
     }
 
     private String log(String type, String message) {
         String time = LocalTime.now().withNano(0).toString();
-        return "[" + time + "] [L=" + clock + "] [" + type + "] " + message;
+        return "[" + time + "] [L=" + clock.get() + "] [" + type + "] " + message;
     }
 
     // ================= MAIN =================
     public void book(Booking b, String serverId) {
         tick();
         logs.add(log("CLIENT", "Nhận request: " + b.getName()));
-        b.setLamportTime(clock);
+        b.setLamportTime(clock.get());
 
         CompletableFuture.runAsync(() -> {
 
-            RestTemplate rt = createRestTemplate();
-            List<String> okServers = Collections.synchronizedList(new ArrayList<>());
+            try { // 🔥 FIX QUAN TRỌNG
 
-            // ===== PHASE 1: PREPARE =====
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
+                RestTemplate rt = createRestTemplate();
+                List<String> okServers = Collections.synchronizedList(new ArrayList<>());
 
-            for (String url : otherServers) {
-                futures.add(CompletableFuture.runAsync(() -> {
-                    try {
-                        tick();
-                        logs.add(log("4PC", "PREPARE → " + url));
+                // ===== PHASE 1 =====
+                List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-                        Boolean res = rt.postForObject(url + "/api/prepare", b, Boolean.class);
+                for (String url : otherServers) {
+                    futures.add(CompletableFuture.runAsync(() -> {
+                        try {
+                            tick();
+                            logs.add(log("4PC", "PREPARE → " + url));
 
-                        if (Boolean.TRUE.equals(res)) {
-                            okServers.add(url);
-                            logs.add(log("4PC", "VOTE OK từ " + url));
+                            Boolean res = rt.postForObject(url + "/api/prepare", b, Boolean.class);
+
+                            if (Boolean.TRUE.equals(res)) {
+                                okServers.add(url);
+                                logs.add(log("4PC", "VOTE OK từ " + url));
+                            }
+
+                        } catch (Exception e) {
+                            serverStatus.put(url, false);
+                            logs.add(log("ERROR", "PREPARE fail: " + url));
                         }
+                    }, executor));
+                }
 
-                    } catch (Exception e) {
-                        logs.add(log("ERROR", "PREPARE fail: " + url));
-                    }
-                }, executor));
-            }
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                int threshold = (otherServers.length / 2) + 1;
 
-            int threshold = (otherServers.length / 2) + 1;
+                if (okServers.size() < threshold) {
+                    logs.add(log("4PC", "ABORT: Không đủ quorum"));
+                    sendAbort(rt, okServers, b);
+                    return;
+                }
 
-            if (okServers.size() < threshold) {
-                logs.add(log("4PC", "ABORT: Không đủ quorum"));
-                sendAbort(rt, okServers, b);
-                return;
-            }
+                logs.add(log("4PC", "QUORUM OK → PRE-COMMIT"));
 
-            logs.add(log("4PC", "QUORUM OK → PRE-COMMIT"));
-
-            // ===== PHASE 2: PRE-COMMIT =====
-            List<String> preAckServers = Collections.synchronizedList(new ArrayList<>());
-            List<CompletableFuture<Void>> preFutures = new ArrayList<>();
-
-            for (String url : okServers) {
-                preFutures.add(CompletableFuture.runAsync(() -> {
-                    try {
-                        tick();
-                        logs.add(log("4PC", "PRE-COMMIT → " + url));
-
-                        String res = rt.postForObject(url + "/api/pre-commit", b, String.class);
-
-                        if ("PRE_ACK".equals(res)) {
-                            preAckServers.add(url);
-                            logs.add(log("4PC", "PRE_ACK từ " + url));
-                        }
-
-                    } catch (Exception e) {
-                        logs.add(log("ERROR", "PRE-COMMIT fail: " + url));
-                    }
-                }, executor));
-            }
-
-            CompletableFuture.allOf(preFutures.toArray(new CompletableFuture[0])).join();
-
-            // ===== RETRY =====
-            if (preAckServers.size() < threshold) {
-                logs.add(log("4PC", "Retry PRE-COMMIT..."));
-                sleep(2000);
-
-                List<CompletableFuture<Void>> retryFutures = new ArrayList<>();
+                // ===== PHASE 2 =====
+                List<String> preAckServers = Collections.synchronizedList(new ArrayList<>());
+                List<CompletableFuture<Void>> preFutures = new ArrayList<>();
 
                 for (String url : okServers) {
-                    if (!preAckServers.contains(url)) {
-                        retryFutures.add(CompletableFuture.runAsync(() -> {
-                            try {
-                                String res = rt.postForObject(url + "/api/pre-commit", b, String.class);
+                    preFutures.add(CompletableFuture.runAsync(() -> {
+                        try {
+                            tick();
+                            logs.add(log("4PC", "PRE-COMMIT → " + url));
 
-                                if ("PRE_ACK".equals(res)) {
-                                    preAckServers.add(url);
-                                    logs.add(log("4PC", "PRE_ACK (retry) từ " + url));
-                                }
+                            String res = rt.postForObject(url + "/api/pre-commit", b, String.class);
 
-                            } catch (Exception e) {
-                                logs.add(log("ERROR", "Retry fail: " + url));
+                            if ("PRE_ACK".equals(res)) {
+                                preAckServers.add(url);
+                                logs.add(log("4PC", "PRE_ACK từ " + url));
                             }
-                        }, executor));
-                    }
+
+                        } catch (Exception e) {
+                            logs.add(log("ERROR", "PRE-COMMIT fail: " + url));
+                        }
+                    }, executor));
                 }
 
-                CompletableFuture.allOf(retryFutures.toArray(new CompletableFuture[0])).join();
-            }
+                CompletableFuture.allOf(preFutures.toArray(new CompletableFuture[0])).join();
 
-            // ===== DECISION =====
-            if (preAckServers.size() >= threshold) {
+                // ===== DECISION =====
+                if (preAckServers.size() >= threshold) {
 
-                tick();
-                logs.add(log("4PC", "ĐỦ PRE_ACK → COMMIT"));
+                    tick();
+                    logs.add(log("4PC", "ĐỦ PRE_ACK → COMMIT"));
 
-                // commit local
-                repository.save(b);
-                logs.add(log("DATABASE", "COMMIT local OK"));
+                    // 🔥 DEBUG
+                    logs.add("DEBUG: chuẩn bị commit...");
 
-                // ===== PHASE 3: COMMIT =====
-                for (String url : preAckServers) {
-                    try {
-                        rt.postForObject(url + "/api/commit", b, String.class);
-                        logs.add(log("4PC", "COMMIT → " + url));
-                    } catch (Exception e) {
-                        logs.add(log("ERROR", "COMMIT fail: " + url));
+                    // ===== COMMIT LOCAL =====
+                    repository.save(b);
+                    logs.add(log("DATABASE", "COMMIT local OK"));
 
-                        // 🔥 lưu lại để recovery
-                        pendingCommits
-                                .computeIfAbsent(url, k -> Collections.synchronizedList(new ArrayList<>()))
-                                .add(b);
+                    // ===== COMMIT REMOTE =====
+                    for (String url : preAckServers) {
+                        try {
+                            rt.postForObject(url + "/api/commit", b, String.class);
+                            logs.add(log("4PC", "COMMIT → " + url));
+                        } catch (Exception e) {
+                            logs.add(log("ERROR", "COMMIT fail: " + url));
+
+                            pendingCommits
+                                    .computeIfAbsent(url, k -> Collections.synchronizedList(new ArrayList<>()))
+                                    .add(b);
+                        }
                     }
+                } else {
+                    logs.add(log("4PC", "TIMEOUT → ABORT"));
+                    sendAbort(rt, okServers, b);
                 }
 
-            } else {
-                logs.add(log("4PC", "TIMEOUT → ABORT"));
-                sendAbort(rt, okServers, b);
+            } catch (Exception e) {
+                logs.add(log("FATAL", "THREAD CRASH: " + e.getMessage()));
             }
 
         }, executor);
     }
 
-    // ================= RECOVERY AUTO =================
+    // ================= RECOVERY =================
     @Scheduled(fixedDelay = 5000)
     public void autoRecovery() {
         RestTemplate rt = createRestTemplate();
@@ -195,17 +174,18 @@ public class BookingService {
         for (String url : pendingCommits.keySet()) {
 
             List<Booking> list = pendingCommits.get(url);
-            Iterator<Booking> iterator = list.iterator();
+            if (list == null)
+                continue;
 
-            while (iterator.hasNext()) {
-                Booking b = iterator.next();
+            Iterator<Booking> it = list.iterator();
+
+            while (it.hasNext()) {
+                Booking b = it.next();
 
                 try {
                     rt.postForObject(url + "/api/commit", b, String.class);
                     logs.add(log("RECOVERY", "Đồng bộ lại thành công → " + url));
-
-                    iterator.remove();
-
+                    it.remove();
                 } catch (Exception e) {
                     logs.add(log("RECOVERY", "Server chưa sống → " + url));
                 }
@@ -219,13 +199,6 @@ public class BookingService {
                 rt.postForObject(url + "/api/abort", b, String.class);
             } catch (Exception ignored) {
             }
-        }
-    }
-
-    private void sleep(int ms) {
-        try {
-            Thread.sleep(ms);
-        } catch (Exception ignored) {
         }
     }
 
@@ -245,7 +218,7 @@ public class BookingService {
 
     public String preCommit(Booking b) {
         updateClock(b.getLamportTime());
-        logs.add(log("4PC", "Nhận PRE-COMMIT → log tạm"));
+        logs.add(log("4PC", "Nhận PRE-COMMIT"));
         return "PRE_ACK";
     }
 

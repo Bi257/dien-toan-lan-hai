@@ -23,16 +23,14 @@ public class BookingController {
     @PostMapping("/book")
     public String book(@RequestBody Booking b) {
         System.out.println("Nhận request /book: " + b.getName());
-
         service.book(b, serverId);
-
         return "Booking thành công!";
     }
 
     // ================= PHASE 1 =================
     @PostMapping("/prepare")
     public boolean prepare(@RequestBody Booking b) {
-        return service.prepare(b); // luôn TRUE (đã fix ở service)
+        return service.prepare(b);
     }
 
     // ================= PHASE 2 =================
@@ -46,13 +44,6 @@ public class BookingController {
     public String commit(@RequestBody Booking b) {
         service.commit(b);
         return "COMMIT OK";
-    }
-
-    // 🔥 FIX QUAN TRỌNG NHẤT: dùng globalId thay id
-    @PostMapping("/replicated/{globalId}")
-    public String markReplicated(@PathVariable String globalId) {
-        service.markReplicated(globalId);
-        return "REPLICATED OK";
     }
 
     // ================= ABORT =================

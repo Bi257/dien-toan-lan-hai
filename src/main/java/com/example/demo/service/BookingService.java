@@ -25,7 +25,7 @@ public class BookingService {
             "https://hotel-booking-system-new.onrender.com",
             "https://dientoanck2.onrender.com",
             "https://demo2-75m2.onrender.com",
-            "https://saythonginsomphone001.onrender.com"
+            "https://saythonginsomphone002.onrender.com"
     };
 
     private ConcurrentHashMap<String, Boolean> serverStatus = new ConcurrentHashMap<>();

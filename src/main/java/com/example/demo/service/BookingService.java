@@ -24,7 +24,7 @@ public class BookingService {
     private String[] otherServers = {
             "https://dientoanck2.onrender.com",
             "https://hotel-booking-system-new.onrender.com",
-            "https://demo2-75m2.onrender.com",
+            "https://demo3-ieuy.onrender.com",
             "https://saythonginsomphone002.onrender.com"
     };
 

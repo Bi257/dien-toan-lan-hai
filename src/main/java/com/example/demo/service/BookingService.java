@@ -31,10 +31,8 @@ public class BookingService {
     private ConcurrentHashMap<String, Boolean> serverStatus = new ConcurrentHashMap<>();
     private ConcurrentHashMap<String, List<Booking>> pendingCommits = new ConcurrentHashMap<>();
 
-    // 🔥 FIX OVERBOOKING
-    private ConcurrentHashMap<String, Integer> pendingCount = new ConcurrentHashMap<>();
-
     private ExecutorService executor = Executors.newFixedThreadPool(5);
+
     private AtomicInteger clock = new AtomicInteger(0);
 
     public BookingService() {
@@ -62,7 +60,7 @@ public class BookingService {
         tick();
         logs.add(log("CLIENT", "Nhận request: " + b.getName()));
         b.setLamportTime(clock.get());
-        b.setReplicated(false);
+        b.setReplicated(false); // mặc định
 
         CompletableFuture.runAsync(() -> {
 
@@ -105,7 +103,7 @@ public class BookingService {
 
                 logs.add(log("4PC", "QUORUM OK → PRE-COMMIT"));
 
-                // ===== PHASE 2 =====
+                // ===== PHASE 2: PRE-COMMIT =====
                 List<String> preAckServers = Collections.synchronizedList(new ArrayList<>());
                 List<CompletableFuture<Void>> preFutures = new ArrayList<>();
 
@@ -136,12 +134,13 @@ public class BookingService {
                     tick();
                     logs.add(log("4PC", "ĐỦ PRE_ACK → COMMIT"));
 
-                    // COMMIT LOCAL
+                    // ===== COMMIT LOCAL =====
                     repository.save(b);
                     logs.add(log("DATABASE", "COMMIT local OK"));
 
                     int success = 0;
 
+                    // ===== COMMIT REMOTE =====
                     for (String url : preAckServers) {
                         try {
                             rt.postForObject(url + "/api/commit", b, String.class);
@@ -155,7 +154,7 @@ public class BookingService {
                                     .add(b);
                         }
                     }
-
+                    // ===== SET REPLICATED =====
                     if (success == preAckServers.size()) {
                         b.setReplicated(true);
                         repository.save(b);
@@ -192,9 +191,10 @@ public class BookingService {
 
                 try {
                     rt.postForObject(url + "/api/commit", b, String.class);
-                    logs.add(log("RECOVERY", "Đồng bộ lại → " + url));
+                    logs.add(log("RECOVERY", "Đồng bộ lại thành công → " + url));
                     it.remove();
 
+                    // kiểm tra booking này còn pending ở server nào không
                     boolean done = true;
                     for (List<Booking> otherList : pendingCommits.values()) {
                         if (otherList.contains(b)) {
@@ -203,14 +203,15 @@ public class BookingService {
                         }
                     }
 
+                    // nếu sync xong hết → set TRUE
                     if (done) {
                         b.setReplicated(true);
                         repository.save(b);
-                        logs.add(log("DATABASE", "RECOVERY → TRUE"));
+                        logs.add(log("DATABASE", "RECOVERY → REPLICATED = TRUE"));
                     }
 
                 } catch (Exception e) {
-                    logs.add(log("RECOVERY", "Server chết → " + url));
+                    logs.add(log("RECOVERY", "Server chưa sống → " + url));
                 }
             }
         }
@@ -224,9 +225,6 @@ public class BookingService {
             } catch (Exception ignored) {
             }
         }
-
-        // 🔥 giảm pending khi abort
-        pendingCount.computeIfPresent(b.getRoom(), (k, v) -> Math.max(0, v - 1));
     }
 
     private RestTemplate createRestTemplate() {
@@ -237,23 +235,9 @@ public class BookingService {
     }
 
     // ================= PARTICIPANT =================
-    public synchronized boolean prepare(Booking b) {
+    public boolean prepare(Booking b) {
         updateClock(b.getLamportTime());
-
-        int committed = repository.countByRoom(b.getRoom());
-        int pending = pendingCount.getOrDefault(b.getRoom(), 0);
-
-        int MAX = 5;
-
-        if (committed + pending >= MAX) {
-            logs.add(log("BUSINESS", "PHÒNG ĐẦY → ABORT: " + b.getRoom()));
-            return false;
-        }
-
-        // giữ slot
-        pendingCount.put(b.getRoom(), pending + 1);
-
-        logs.add(log("BUSINESS", "GIỮ CHỖ → OK: " + b.getRoom()));
+        logs.add(log("4PC", "Nhận PREPARE"));
         return true;
     }
 
@@ -265,12 +249,7 @@ public class BookingService {
 
     public void commit(Booking b) {
         updateClock(b.getLamportTime());
-
         repository.save(b);
-
-        // giảm pending
-        pendingCount.computeIfPresent(b.getRoom(), (k, v) -> Math.max(0, v - 1));
-
         logs.add(log("4PC", "COMMIT thành công"));
     }
 

@@ -235,9 +235,18 @@ public class BookingService {
     }
 
     // ================= PARTICIPANT =================
-    public boolean prepare(Booking b) {
+    public synchronized boolean prepare(Booking b) {
         updateClock(b.getLamportTime());
-        logs.add(log("4PC", "Nhận PREPARE"));
+
+        int current = repository.countByRoom(b.getRoom());
+        int MAX = 5; // 👉 số chỗ tối đa mỗi phòng
+
+        if (current >= MAX) {
+            logs.add(log("BUSINESS", "PHÒNG ĐẦY → ABORT: " + b.getRoom()));
+            return false;
+        }
+
+        logs.add(log("BUSINESS", "CÒN CHỖ → OK: " + b.getRoom()));
         return true;
     }
 
